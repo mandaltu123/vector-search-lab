@@ -1,4 +1,4 @@
-#!/Users/tsm/work/learn-perosnal/vectordb-chroma/.venv/bin/python3.11
+#!/Users/tsm/work/learn-perosnal/vectordb-chroma/.venv/bin/python
 import sys
 from nbformat.sign import TrustNotebookApp
 if __name__ == '__main__':
