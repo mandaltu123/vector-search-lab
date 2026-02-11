@@ -187,7 +187,127 @@ collection.add(
 )
 ```
 
-## 12) Clean Up (optional)
+## 12) OCR + LLM Extraction (PDF FAQ → Chroma)
+**Concept**: Use OCR to extract text from a PDF, then use an LLM to structure Q/A pairs,
+and upsert into Chroma. This example streams tokens and chunks OCR text to reduce prompt size.
+
+```
+import os
+import json
+import re
+import time
+import urllib.request
+from pdf2image import convert_from_path
+import pytesseract
+import chromadb
+
+PDF_PATH = "/Users/tsm/work/learn-perosnal/vectordb-chroma/faq-data/faq_unstructured.pdf"
+
+OLLAMA_URL = os.getenv("OLLAMA_URL", "http://localhost:11434")
+OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "llama3.1:latest")
+OLLAMA_TIMEOUT = int(os.getenv("OLLAMA_TIMEOUT", "30"))
+OLLAMA_RETRIES = int(os.getenv("OLLAMA_RETRIES", "5"))
+
+HOST = os.getenv("CHROMA_HOST", "localhost")
+PORT = int(os.getenv("CHROMA_PORT", "8001"))
+
+client = chromadb.HttpClient(host=HOST, port=PORT)
+collection = client.get_or_create_collection("faq_ocr_llama")
+
+# ---- 1) OCR the PDF ----
+images = convert_from_path(PDF_PATH, dpi=300)
+ocr_text = "\n".join(pytesseract.image_to_string(img) for img in images).strip()
+if not ocr_text:
+    raise ValueError("OCR produced no text. Check Tesseract install or PDF quality.")
+
+# ---- 2) Chunk OCR text to reduce prompt size ----
+def chunk_text(text: str, max_chars: int = 6000):
+    parts = []
+    buf = []
+    size = 0
+    for line in text.splitlines():
+        if size + len(line) + 1 > max_chars and buf:
+            parts.append("\n".join(buf))
+            buf = []
+            size = 0
+        buf.append(line)
+        size += len(line) + 1
+    if buf:
+        parts.append("\n".join(buf))
+    return parts
+
+chunks = chunk_text(ocr_text, max_chars=6000)
+
+def ollama_generate_stream(prompt: str) -> str:
+    payload = json.dumps({
+        "model": OLLAMA_MODEL,
+        "prompt": prompt,
+        "stream": True
+    }).encode("utf-8")
+    req = urllib.request.Request(
+        f"{OLLAMA_URL}/api/generate",
+        data=payload,
+        headers={"Content-Type": "application/json"}
+    )
+    out = []
+    with urllib.request.urlopen(req, timeout=OLLAMA_TIMEOUT) as resp:
+        for line in resp:
+            data = json.loads(line.decode("utf-8"))
+            if "response" in data:
+                out.append(data["response"])
+            if data.get("done"):
+                break
+    return "".join(out).strip()
+
+def extract_qa_pairs(text: str):
+    prompt = f\"\"\"
+You are a strict JSON extractor.
+
+From the text below, extract FAQ question/answer pairs.
+Return ONLY valid JSON array of objects like:
+[
+  {{"question": "...", "answer": "..."}}
+]
+
+Rules:
+- Keep answers concise but complete.
+- Ignore headings or unrelated text.
+- If no Q/A pairs, return [].
+
+TEXT:
+{text}
+\"\"\"
+    last_err = None
+    for attempt in range(OLLAMA_RETRIES):
+        try:
+            raw = ollama_generate_stream(prompt)
+            json_text = raw[raw.find("["): raw.rfind("]") + 1]
+            return json.loads(json_text)
+        except Exception as e:
+            last_err = e
+            time.sleep(1)
+    raise last_err
+
+all_pairs = []
+for chunk in chunks:
+    all_pairs.extend(extract_qa_pairs(chunk))
+
+documents, metadatas, ids = [], [], []
+for idx, item in enumerate(all_pairs):
+    q = re.sub(r"\s+", " ", item.get("question", "")).strip()
+    a = re.sub(r"\s+", " ", item.get("answer", "")).strip()
+    if not q or not a:
+        continue
+    documents.append(f"Question: {q}\nAnswer: {a}")
+    metadatas.append({"source": "faq_unstructured.pdf", "row_id": idx})
+    ids.append(f"faq-ocr-{idx:06d}")
+
+collection.upsert(ids=ids, documents=documents, metadatas=metadatas)
+print("Loaded rows:", len(documents))
+print("Collection count:", collection.count())
+```
+
+## 13) Clean Up (optional)
 ```
 import chromadb
 

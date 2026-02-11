@@ -147,3 +147,81 @@ print("Collection count:", collection.count())
 ```
 docker stop chroma
 ```
+
+## FAQ OCR + Llama script (run / access / test)
+Script: `scripts/faq_ocr_llama.py`
+
+### Install deps (macOS)
+```
+brew install tesseract poppler
+python -m pip install pytesseract pdf2image pillow
+```
+
+### Env vars
+```
+export CHROMA_HOST=localhost
+export CHROMA_PORT=8001
+
+export OLLAMA_URL="http://localhost:11434"
+export OLLAMA_MODEL="llama3.1:latest"
+export OLLAMA_TIMEOUT="30"
+export OLLAMA_RETRIES="5"
+```
+
+### Run
+```
+python3 scripts/faq_ocr_llama.py
+```
+
+### Test (interactive chat)
+After the script loads the FAQ, it enters a prompt. Example:
+```
+You: How do I reset my password?
+You: I want to cancel my subscription
+You: exit
+```
+
+## FAQ OCR + Llama flow (what is happening)
+### Flow diagram
+```
+PDF (faq_unstructured.pdf)
+        |
+        v
+OCR (pdf2image + pytesseract)
+        |
+        v
+Chunked text
+        |
+        v
+Ollama LLM (streaming JSON extraction)
+        |
+        v
+Q/A pairs -> documents + metadata
+        |
+        v
+ChromaDB (collection: faq_ocr_llama)
+        |
+        v
+User question -> vector search -> context
+        |
+        v
+Ollama LLM (answer + citations)
+```
+
+### What is used and why (table)
+| Step | Component | Purpose | Where in script |
+|---|---|---|---|
+| 1 | `pdf2image`, `pytesseract` | OCR the PDF into text | OCR block |
+| 2 | Chunking logic | Reduce prompt size, avoid context overflow | `chunk_text()` |
+| 3 | Ollama `/api/generate` (streaming) | Extract Q/A pairs as JSON | `ollama_generate_stream()` + `extract_qa_pairs()` |
+| 4 | `chromadb.HttpClient` | Store Q/A into Chroma | `collection.upsert(...)` |
+| 5 | Vector search | Find relevant FAQ entries | `faq_search()` |
+| 6 | Ollama `/api/generate` (non-streaming) | Produce final answer with citations | `ollama_chat()` + `rag_answer_faq()` |
+
+### How the answers are produced
+- OCR reads the PDF and produces raw text.
+- The text is chunked so each LLM call is smaller and reliable.
+- Ollama extracts clean JSON Q/A pairs from each chunk.
+- Each Q/A is stored in Chroma as a document with metadata.
+- When you ask a question, Chroma retrieves the closest FAQ items.
+- The retrieved FAQ context is fed to Ollama to produce a grounded answer with citations.
