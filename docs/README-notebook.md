@@ -225,3 +225,19 @@ Ollama LLM (answer + citations)
 - Each Q/A is stored in Chroma as a document with metadata.
 - When you ask a question, Chroma retrieves the closest FAQ items.
 - The retrieved FAQ context is fed to Ollama to produce a grounded answer with citations.
+
+## Interview prep topics (from this use case)
+| Topic | What to know | Where it shows up here |
+|---|---|---|
+| Vector DB basics | Collections, documents, metadata, upsert, delete | Chroma `collection` usage |
+| Vector search | Similarity search, Top‑K, distance/score | `collection.query(...)` |
+| Embeddings | How text becomes vectors, embedding size/quality | Chroma embeddings under the hood |
+| ANN vs exact search | Trade‑offs between speed and recall | Vector DB design questions |
+| RAG pipeline | Retrieval → context → generation | `faq_search()` + `rag_answer_faq()` |
+| Prompting & grounding | System prompts, constraints, citations | `SYSTEM_PROMPT` in script |
+| Hallucination control | Refuse when no good match, cite sources | `max_distance` + citations |
+| OCR & parsing | PDF → text → structured Q/A | `pdf2image`, `pytesseract` |
+| LLM invocation | API call, streaming, retries, timeouts | Ollama `/api/generate` |
+| Chunking | Reduce prompt size, avoid truncation | `chunk_text()` |
+| Evaluation | Check answer relevance, inspect matches | Debug list of retrieved hits |
+| Ops & reliability | Env vars, timeouts, retries | `OLLAMA_*` configs |
