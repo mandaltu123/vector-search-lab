@@ -1,5 +1,12 @@
 # ChromaDB Lab
 
+![Python](https://img.shields.io/badge/Python-3.11+-blue?logo=python&logoColor=white)
+![ChromaDB](https://img.shields.io/badge/ChromaDB-Vector_Store-orange)
+![Ollama](https://img.shields.io/badge/Ollama-LLaMA_3.1-black)
+![Jupyter](https://img.shields.io/badge/Jupyter-Notebook-F37626?logo=jupyter&logoColor=white)
+![Docker](https://img.shields.io/badge/Docker-blue?logo=docker&logoColor=white)
+![License](https://img.shields.io/badge/License-MIT-yellow)
+
 **A practical exploration of ChromaDB** — from local setup to production Docker deployment, with real scripts for FAQ ingestion using OCR + LLaMA-powered structuring.
 
 ## What's Inside
@@ -74,3 +81,7 @@ vectordb-chroma/
 ├── requirements.txt
 └── README.md
 ```
+
+## License
+
+MIT — see [LICENSE](LICENSE)
